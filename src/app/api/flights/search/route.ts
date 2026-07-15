@@ -8,6 +8,7 @@ export async function POST(req: NextRequest) {
     const flights = await searchFlights(params);
     return NextResponse.json({ flights });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 501 });
+    console.error("flights/search:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }

@@ -5,13 +5,43 @@ const BASE_URL = process.env.SABRE_BASE_URL ?? "https://api.cert.platform.sabre.
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
-/** OAuth2 client-credentials token, cached until expiry. */
+/**
+ * OAuth2 client-credentials token, cached until expiry.
+ * Sabre v2 auth uses double-encoded credentials:
+ * base64( base64(clientId) + ":" + base64(clientSecret) )
+ */
 export async function getSabreToken(): Promise<string> {
   if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
     return cachedToken.token;
   }
-  // TODO(K2): POST /v2/auth/token with base64(clientId:clientSecret)
-  throw new Error("Not implemented: Sabre auth (K2)");
+
+  const clientId = process.env.SABRE_CLIENT_ID;
+  const clientSecret = process.env.SABRE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error("SABRE_CLIENT_ID / SABRE_CLIENT_SECRET are not set (see .env.example)");
+  }
+
+  const b64 = (s: string) => Buffer.from(s).toString("base64");
+  const credentials = b64(`${b64(clientId)}:${b64(clientSecret)}`);
+
+  const res = await fetch(`${BASE_URL}/v2/auth/token`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: "grant_type=client_credentials",
+  });
+  if (!res.ok) {
+    throw new Error(`Sabre auth failed (${res.status}): ${await res.text()}`);
+  }
+
+  const data = (await res.json()) as { access_token: string; expires_in: number };
+  cachedToken = {
+    token: data.access_token,
+    expiresAt: Date.now() + data.expires_in * 1000,
+  };
+  return cachedToken.token;
 }
 
 export interface FlightSearchParams {
@@ -20,12 +50,141 @@ export interface FlightSearchParams {
   departureDate: string; // YYYY-MM-DD
   returnDate?: string;
   preferredCarrier?: string; // e.g. "AA" for the American Airlines story
+  maxResults?: number; // default 5 — keep it small, the agent reads these aloud
 }
 
-export async function searchFlights(params: FlightSearchParams): Promise<unknown[]> {
-  // TODO(K2): Bargain Finder Max (or hackathon-2026 collection equivalent)
-  void params;
-  throw new Error("Not implemented: Sabre flight search (K2)");
+export interface FlightSegment {
+  from: string;
+  to: string;
+  departure: string; // ISO local, e.g. "2026-07-18T08:15:00"
+  arrival: string;
+  flight: string; // e.g. "AA 1234"
+}
+
+export interface FlightOption {
+  id: number;
+  totalPrice: number;
+  currency: string;
+  validatingCarrier: string;
+  segments: FlightSegment[];
+}
+
+/** Bargain Finder Max (POST /v4/offers/shop), simplified for voice. */
+export async function searchFlights(params: FlightSearchParams): Promise<FlightOption[]> {
+  const token = await getSabreToken();
+  const maxResults = params.maxResults ?? 5;
+
+  const originDestination: Record<string, unknown>[] = [
+    {
+      RPH: "1",
+      DepartureDateTime: `${params.departureDate}T00:00:00`,
+      OriginLocation: { LocationCode: params.origin },
+      DestinationLocation: { LocationCode: params.destination },
+    },
+  ];
+  if (params.returnDate) {
+    originDestination.push({
+      RPH: "2",
+      DepartureDateTime: `${params.returnDate}T00:00:00`,
+      OriginLocation: { LocationCode: params.destination },
+      DestinationLocation: { LocationCode: params.origin },
+    });
+  }
+
+  const request = {
+    OTA_AirLowFareSearchRQ: {
+      Version: "4",
+      POS: {
+        Source: [
+          {
+            PseudoCityCode: process.env.SABRE_PCC || undefined,
+            RequestorID: { Type: "1", ID: "1", CompanyName: { Code: "TN" } },
+          },
+        ],
+      },
+      OriginDestinationInformation: originDestination,
+      TravelPreferences: params.preferredCarrier
+        ? { VendorPref: [{ Code: params.preferredCarrier, PreferLevel: "Preferred" }] }
+        : undefined,
+      TravelerInfoSummary: {
+        AirTravelerAvail: [{ PassengerTypeQuantity: [{ Code: "ADT", Quantity: 1 }] }],
+      },
+      TPA_Extensions: {
+        IntelliSellTransaction: { RequestType: { Name: `${maxResults * 4}ITINS` } },
+      },
+    },
+  };
+
+  const res = await fetch(`${BASE_URL}/v4/offers/shop`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    throw new Error(`Sabre flight search failed (${res.status}): ${await res.text()}`);
+  }
+
+  const data = await res.json();
+  return simplifyBfmResponse(data, maxResults);
+}
+
+/* Bargain Finder Max returns a normalized "groupedItineraryResponse": itineraries
+   reference legs by id, legs reference schedules (flight segments) by id. Join
+   them back together into flat FlightOptions the voice agent can read aloud. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function simplifyBfmResponse(data: any, maxResults: number): FlightOption[] {
+  const g = data?.groupedItineraryResponse;
+  if (!g) throw new Error(`Unexpected Sabre response shape: ${JSON.stringify(data).slice(0, 300)}`);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const scheduleById = new Map<number, any>(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (g.scheduleDescs ?? []).map((s: any) => [s.id, s]),
+  );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const legById = new Map<number, any>((g.legDescs ?? []).map((l: any) => [l.id, l]));
+
+  const options: FlightOption[] = [];
+  for (const group of g.itineraryGroups ?? []) {
+    const legDates: string[] = (group.groupDescription?.legDescriptions ?? []).map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (d: any) => d.departureDate,
+    );
+    for (const itin of group.itineraries ?? []) {
+      const segments: FlightSegment[] = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (itin.legs ?? []).forEach((legRef: any, legIndex: number) => {
+        const leg = legById.get(legRef.ref);
+        const date = legDates[legIndex] ?? "";
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const schedRef of leg?.schedules ?? []) {
+          const s = scheduleById.get(schedRef.ref);
+          if (!s) continue;
+          segments.push({
+            from: s.departure?.airport ?? "",
+            to: s.arrival?.airport ?? "",
+            departure: `${schedRef.departureDate ?? date}T${s.departure?.time?.slice(0, 8) ?? ""}`,
+            arrival: `${schedRef.departureDate ?? date}T${s.arrival?.time?.slice(0, 8) ?? ""}`,
+            flight: `${s.carrier?.marketing ?? ""} ${s.carrier?.marketingFlightNumber ?? ""}`.trim(),
+          });
+        }
+      });
+
+      const pricing = itin.pricingInformation?.[0]?.fare;
+      options.push({
+        id: itin.id,
+        totalPrice: pricing?.totalFare?.totalPrice ?? 0,
+        currency: pricing?.totalFare?.currency ?? "USD",
+        validatingCarrier: pricing?.validatingCarrierCode ?? "",
+        segments,
+      });
+      if (options.length >= maxResults) return options;
+    }
+  }
+  return options;
 }
 
 export interface HotelSearchParams {
