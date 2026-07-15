@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
     const trip = updateTrip(tripId, { paymentStatus: "paid" });
     return NextResponse.json({ status, trip });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 501 });
+    console.error("pay/capture:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }

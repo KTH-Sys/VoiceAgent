@@ -8,6 +8,7 @@ export async function POST(req: NextRequest) {
     const hotels = await searchHotels(params);
     return NextResponse.json({ hotels });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 501 });
+    console.error("hotels/search:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }

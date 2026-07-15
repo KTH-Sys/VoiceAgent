@@ -188,15 +188,91 @@ function simplifyBfmResponse(data: any, maxResults: number): FlightOption[] {
 }
 
 export interface HotelSearchParams {
-  cityCode: string; // e.g. "DFW"
+  cityCode: string; // airport/city IATA, e.g. "DFW"
   checkIn: string; // YYYY-MM-DD
   checkOut: string; // YYYY-MM-DD
+  maxResults?: number; // default 5 — the agent reads these aloud
 }
 
-export async function searchHotels(params: HotelSearchParams): Promise<unknown[]> {
-  // TODO(K3): Sabre hotel search
-  void params;
-  throw new Error("Not implemented: Sabre hotel search (K3)");
+export interface HotelOption {
+  name: string;
+  hotelCode: string;
+  address?: string;
+  rating?: string;
+  pricePerNight: number;
+  totalPrice?: number;
+  currency: string;
+}
+
+/** Sabre Hotel Availability (POST /v5/get/hotelavail), simplified for voice. */
+export async function searchHotels(params: HotelSearchParams): Promise<HotelOption[]> {
+  const token = await getSabreToken();
+  const maxResults = params.maxResults ?? 5;
+
+  const request = {
+    GetHotelAvailRQ: {
+      SearchCriteria: {
+        OffSet: 1,
+        SortBy: "TotalRate",
+        SortOrder: "ASC",
+        PageSize: maxResults,
+        GeoSearch: {
+          GeoRef: {
+            Radius: 20,
+            UOM: "MI",
+            RefPoint: {
+              Value: params.cityCode,
+              ValueContext: "CODE",
+              RefPointType: "6", // airport code
+            },
+          },
+        },
+        RateInfoRef: {
+          CurrencyCode: "USD",
+          BestOnly: "2",
+          PrepaidQualifier: "IncludePrepaid",
+          StayDateRange: { StartDate: params.checkIn, EndDate: params.checkOut },
+          Rooms: { Room: [{ Index: 1, Adults: 1, Children: 0 }] },
+        },
+      },
+    },
+  };
+
+  const res = await fetch(`${BASE_URL}/v5/get/hotelavail`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    throw new Error(`Sabre hotel search failed (${res.status}): ${await res.text()}`);
+  }
+
+  const data = await res.json();
+  const infos = data?.GetHotelAvailRS?.HotelAvailInfos?.HotelAvailInfo ?? [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return infos.slice(0, maxResults).map((h: any): HotelOption => {
+    const info = h.HotelInfo ?? {};
+    const rate =
+      h.HotelRateInfo?.RateInfos?.ConvertedRateInfo?.[0] ??
+      h.HotelRateInfo?.RateInfos?.RateInfo?.[0] ??
+      {};
+    const nights =
+      (new Date(params.checkOut).getTime() - new Date(params.checkIn).getTime()) / 86_400_000 || 1;
+    const total = Number(rate.AmountAfterTax ?? rate.AmountBeforeTax ?? 0);
+    return {
+      name: info.HotelName ?? "Unknown hotel",
+      hotelCode: String(info.HotelCode ?? ""),
+      address: info.LocationInfo?.Address?.AddressLine1,
+      rating: info.SabreRating,
+      pricePerNight: Math.round((total / nights) * 100) / 100,
+      totalPrice: total,
+      currency: rate.CurrencyCode ?? "USD",
+    };
+  });
 }
 
 export async function createBooking(tripId: string): Promise<{ confirmationNumber: string }> {

@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
     updateTrip(tripId, { paypalOrderId: orderId, paymentStatus: "pending" });
     return NextResponse.json({ orderId, approveUrl });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 501 });
+    console.error("pay:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
