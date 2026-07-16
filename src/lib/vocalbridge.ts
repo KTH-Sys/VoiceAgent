@@ -48,8 +48,44 @@ export interface OutboundCallParams {
   context: string; // what the agent should say / know (disruption details, alternatives)
 }
 
+/**
+ * Trigger an outbound phone call from the Vocal Bridge agent (K6) — the demo
+ * wow moment. Requires "Outbound calling" enabled on the agent in the VB UI.
+ *
+ * NOTE: the exact path/body are documented in the login-gated developer guide
+ * (vocalbridgeai.com/app/developer-guide). This follows VB's /api/v1 + X-API-Key
+ * conventions; if the guide differs, set VOCALBRIDGE_OUTBOUND_PATH in .env.local
+ * (no redeploy of this file needed) or tweak the body below.
+ */
 export async function startOutboundCall(params: OutboundCallParams): Promise<{ callId: string }> {
-  // TODO(K6): trigger an outbound call from the Vocal Bridge agent — the demo wow moment.
-  void params;
-  throw new Error("Not implemented: outbound call (K6)");
+  const apiKey = process.env.VOCALBRIDGE_API_KEY;
+  if (!apiKey) throw new Error("VOCALBRIDGE_API_KEY is not set (see .env.example)");
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-API-Key": apiKey,
+  };
+  const agentId = process.env.VOCALBRIDGE_AGENT_ID;
+  if (agentId) headers["X-Agent-Id"] = agentId;
+
+  const path = process.env.VOCALBRIDGE_OUTBOUND_PATH ?? "/api/v1/calls";
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      phone_number: params.phoneNumber,
+      agent_id: agentId,
+      context: params.context,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `Vocal Bridge outbound call failed (${res.status}): ${await res.text()}. ` +
+        "Check the outbound-calling section of vocalbridgeai.com/app/developer-guide " +
+        "and adjust VOCALBRIDGE_OUTBOUND_PATH / the request body if the API shape differs.",
+    );
+  }
+
+  const data = await res.json().catch(() => ({}));
+  return { callId: String(data.call_id ?? data.id ?? "unknown") };
 }

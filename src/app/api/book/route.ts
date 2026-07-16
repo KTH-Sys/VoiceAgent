@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
     const trip = updateTrip(tripId, { confirmationNumber });
     return NextResponse.json({ trip });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 501 });
+    console.error("book:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }

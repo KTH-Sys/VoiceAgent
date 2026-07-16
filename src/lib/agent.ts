@@ -5,7 +5,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaTool } from "@anthropic-ai/sdk/helpers/beta/json-schema";
 import type { BetaMessageParam } from "@anthropic-ai/sdk/resources/beta";
-import { searchFlights, searchHotels } from "./sabre";
+import { searchFlights, searchHotels, createBooking } from "./sabre";
 import { createOrder } from "./paypal";
 import { getTrip, updateTrip } from "./store";
 
@@ -18,10 +18,15 @@ carrier, time, and price in round numbers ("American flight at 8:15 AM, about $2
 Prefer American Airlines flights when the user has no preference.
 
 Flow: help the user pick a flight (and hotel if asked), save their selection to the
-trip, then create a PayPal payment and tell them to approve it on the screen. Traveler
-passport details come from a document upload on screen — if they're missing, ask the
-user to snap a photo of their passport using the upload button, don't ask them to
-dictate numbers.`;
+trip, then create a PayPal payment and tell them to approve it on the screen. After
+payment, confirm the booking and read the confirmation code slowly. Traveler passport
+details come from a document upload on screen — if they're missing, ask the user to
+snap a photo of their passport using the upload button, don't ask them to dictate numbers.
+
+If the trip is disrupted (check get_trip, or you were given disruption context for a
+phone call): you are calling the traveler proactively. Briefly apologize, state the
+delay, offer the best alternative first, and if they accept, save it with save_selection
+and confirm with confirm_booking. Mention any fare difference goes to their PayPal.`;
 
 /* Conversation history per voice session — in-memory, demo-scale. Tool-call
    exchanges are collapsed; we keep only user/assistant text turns. */
@@ -112,6 +117,17 @@ function buildTools(sessionId: string) {
         );
         updateTrip(sessionId, { paypalOrderId: orderId, paymentStatus: "pending" });
         return `Payment created (order ${orderId}). Approval link is showing on the user's screen: ${approveUrl}. Tell the user to approve it there.`;
+      },
+    }),
+    betaTool({
+      name: "confirm_booking",
+      description:
+        "Finalize the booking and get a confirmation code. Call this after the user has paid (or accepted a rebooking during a disruption call).",
+      inputSchema: { type: "object", properties: {} },
+      run: async () => {
+        const { confirmationNumber } = await createBooking(sessionId);
+        updateTrip(sessionId, { confirmationNumber, disrupted: false });
+        return `Booking confirmed. Confirmation code: ${confirmationNumber}.`;
       },
     }),
   ];
