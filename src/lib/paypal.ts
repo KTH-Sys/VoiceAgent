@@ -72,6 +72,13 @@ export async function createOrder(
 }
 
 export async function captureOrder(orderId: string): Promise<{ status: string }> {
+  // Demo mode: skip the sandbox buyer-approval + capture round-trip entirely.
+  // Order creation stays real either way, so the API usage is genuine.
+  if (process.env.PAYPAL_SIMULATE === "1") {
+    console.log(`[paypal] simulated capture for order ${orderId}`);
+    return { status: "COMPLETED" };
+  }
+
   const token = await getPayPalToken();
 
   const res = await fetch(`${BASE_URL}/v2/checkout/orders/${orderId}/capture`, {
