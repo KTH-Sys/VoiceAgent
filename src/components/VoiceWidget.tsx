@@ -5,8 +5,9 @@
 
 import { useMemo } from "react";
 import { VocalBridgeProvider, useVocalBridge, useTranscript, useAIAgent } from "@vocalbridgeai/react";
+import { DEMO_TRIP_ID } from "@/lib/constants";
 
-const SESSION_ID = "demo"; // single-trip demo; matches the trip id in the store
+const SESSION_ID = DEMO_TRIP_ID; // the voice session and the trip card share one id
 
 function VoiceChat() {
   const { state, connect, disconnect, isMicrophoneEnabled, toggleMicrophone } = useVocalBridge();

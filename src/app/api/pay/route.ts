@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   try {
     const { tripId, amountUsd, description } = await req.json();
     const { orderId, approveUrl } = await createOrder(amountUsd, description);
-    updateTrip(tripId, { paypalOrderId: orderId, paymentStatus: "pending" });
+    updateTrip(tripId, { paypalOrderId: orderId, paypalApproveUrl: approveUrl, paymentStatus: "pending" });
     return NextResponse.json({ orderId, approveUrl });
   } catch (err) {
     console.error("pay:", err);

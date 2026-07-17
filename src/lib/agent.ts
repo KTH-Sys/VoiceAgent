@@ -115,7 +115,11 @@ function buildTools(sessionId: string) {
           input.amountUsd as string,
           input.description as string,
         );
-        updateTrip(sessionId, { paypalOrderId: orderId, paymentStatus: "pending" });
+        updateTrip(sessionId, {
+          paypalOrderId: orderId,
+          paypalApproveUrl: approveUrl,
+          paymentStatus: "pending",
+        });
         return `Payment created (order ${orderId}). Approval link is showing on the user's screen: ${approveUrl}. Tell the user to approve it there.`;
       },
     }),

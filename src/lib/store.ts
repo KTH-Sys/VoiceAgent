@@ -15,6 +15,7 @@ export interface Trip {
   traveler?: TravelerProfile;
   paymentStatus: "unpaid" | "pending" | "paid";
   paypalOrderId?: string;
+  paypalApproveUrl?: string; // surfaced as the on-screen "Approve with PayPal" button
   disrupted: boolean;
   confirmationNumber?: string;
 }

@@ -1,20 +1,22 @@
-// Main demo UI. Voice plumbing (K4) is wired via VoiceWidget; remaining
-// sections for A4: trip summary card, passport upload (POST /api/extract-document),
-// PayPal approve/capture buttons, and the "Simulate Delay" button (POST /api/disrupt).
+// Main demo screen: voice agent on the left, trip state + actions on the right.
 
 import VoiceWidget from "@/components/VoiceWidget";
+import TripDashboard from "@/components/TripDashboard";
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-8 font-sans">
-      <h1 className="text-3xl font-semibold tracking-tight">Voice Travel Agent</h1>
-      <p className="max-w-md text-center text-zinc-500">
-        Books your complete trip by voice — and calls you when it falls apart.
-      </p>
-      <VoiceWidget />
-      <p className="rounded-full border border-zinc-300 px-4 py-1 text-sm text-zinc-400 dark:border-zinc-700">
-        Trip card, passport upload, PayPal &amp; Simulate Delay — see plan.md (A4)
-      </p>
+    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-8 p-6 font-sans md:p-10">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-3xl font-semibold tracking-tight">Voice Travel Agent</h1>
+        <p className="text-zinc-500">
+          Books your complete trip by voice — and calls you when it falls apart.
+        </p>
+      </header>
+
+      <div className="grid items-start gap-6 md:grid-cols-2">
+        <VoiceWidget />
+        <TripDashboard />
+      </div>
     </main>
   );
 }
