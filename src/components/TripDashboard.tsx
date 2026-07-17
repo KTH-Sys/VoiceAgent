@@ -170,7 +170,7 @@ export default function TripDashboard() {
           <div className="flex flex-col gap-4">
             {flight && (
               <div className="flex flex-col gap-1">
-                {flight.segments.map((s, i) => (
+                {(flight.segments ?? []).map((s, i) => (
                   <div key={i} className="flex items-baseline justify-between gap-3">
                     <span className="font-medium">
                       {s.from} → {s.to}
@@ -187,7 +187,7 @@ export default function TripDashboard() {
               <div className="flex items-baseline justify-between gap-3 border-t border-zinc-100 pt-3 dark:border-zinc-900">
                 <span className="font-medium">{hotel.name}</span>
                 <span className="text-sm text-zinc-500">
-                  {money(hotel.pricePerNight, hotel.currency)}/night
+                  {money(hotel.pricePerNight ?? 0, hotel.currency ?? "USD")}/night
                 </span>
               </div>
             )}

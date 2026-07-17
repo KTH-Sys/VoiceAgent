@@ -5,6 +5,7 @@
 import OpenAI from "openai";
 import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources/chat/completions";
 import { searchFlights, searchHotels, createBooking } from "./sabre";
+import type { FlightOption, HotelOption } from "./sabre";
 import { createOrder } from "./paypal";
 import { getTrip, updateTrip } from "./store";
 
@@ -70,12 +71,12 @@ const TOOLS: ChatCompletionTool[] = [
     function: {
       name: "save_selection",
       description:
-        "Save the flight and/or hotel the user chose to their trip. Call this as soon as the user picks an option, before payment.",
+        "Save the flight and/or hotel the user chose to their trip. Call this as soon as the user picks an option, before payment. Reference options by the id/hotelCode from the most recent search results — double-check the id belongs to the option whose time/name the user actually said.",
       parameters: {
         type: "object",
         properties: {
-          flight: { type: "string", description: "JSON of the chosen flight option" },
-          hotel: { type: "string", description: "JSON of the chosen hotel option" },
+          flightId: { type: "number", description: "id of the chosen flight from search_flights results" },
+          hotelCode: { type: "string", description: "hotelCode of the chosen hotel from search_hotels results" },
         },
       },
     },
@@ -116,20 +117,45 @@ const TOOLS: ChatCompletionTool[] = [
   },
 ];
 
+/* Last search results per session, so selections are saved from real data
+   instead of whatever JSON the model chooses to echo back. */
+const lastResults = new Map<string, { flights: FlightOption[]; hotels: HotelOption[] }>();
+
+function resultsFor(sessionId: string) {
+  let r = lastResults.get(sessionId);
+  if (!r) {
+    r = { flights: [], hotels: [] };
+    lastResults.set(sessionId, r);
+  }
+  return r;
+}
+
 async function runTool(sessionId: string, name: string, args: Record<string, unknown>): Promise<string> {
   switch (name) {
     case "search_flights": {
-      const flights = await searchFlights(args as never);
-      return JSON.stringify(flights.slice(0, 3));
+      const flights = (await searchFlights(args as never)).slice(0, 3);
+      resultsFor(sessionId).flights = flights;
+      return JSON.stringify(flights);
     }
     case "search_hotels": {
-      const hotels = await searchHotels(args as never);
-      return JSON.stringify(hotels.slice(0, 3));
+      const hotels = (await searchHotels(args as never)).slice(0, 3);
+      resultsFor(sessionId).hotels = hotels;
+      return JSON.stringify(hotels);
     }
     case "save_selection": {
+      const { flights, hotels } = resultsFor(sessionId);
       const patch: Record<string, unknown> = {};
-      if (args.flight) patch.flight = JSON.parse(args.flight as string);
-      if (args.hotel) patch.hotel = JSON.parse(args.hotel as string);
+      if (args.flightId !== undefined) {
+        const flight = flights.find((f) => f.id === Number(args.flightId));
+        if (!flight) return `No flight with id ${args.flightId} in the latest search results. Search again first.`;
+        patch.flight = flight;
+      }
+      if (args.hotelCode !== undefined) {
+        const hotel = hotels.find((h) => h.hotelCode === String(args.hotelCode));
+        if (!hotel) return `No hotel with code ${args.hotelCode} in the latest search results. Search again first.`;
+        patch.hotel = hotel;
+      }
+      if (!Object.keys(patch).length) return "Nothing to save — pass flightId and/or hotelCode.";
       updateTrip(sessionId, patch);
       return "Selection saved to trip.";
     }
