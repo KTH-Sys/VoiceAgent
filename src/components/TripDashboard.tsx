@@ -78,6 +78,8 @@ export function TripSummary() {
   const flight = trip?.flight as FlightOption | undefined;
   const hotel = trip?.hotel as HotelOption | undefined;
   const total = tripTotal(trip);
+  const travelers = trip?.travelers ?? [];
+  const confirmed = Boolean(trip?.confirmationNumber);
 
   return (
     <Section title="Your trip" hint="Updates live as Guidio finds options.">
@@ -87,6 +89,20 @@ export function TripSummary() {
         </p>
       ) : (
         <div className="flex flex-col gap-4">
+          {confirmed && (
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-emerald-300/80">Booking confirmed</p>
+                <p className="mt-0.5 font-mono text-xl font-semibold tracking-widest text-white">
+                  {trip?.confirmationNumber}
+                </p>
+              </div>
+              <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-300">
+                ✓ Ticketed
+              </span>
+            </div>
+          )}
+
           {flight && (
             <div className="flex flex-col gap-1">
               {(flight.segments ?? []).map((s, i) => (
@@ -108,6 +124,25 @@ export function TripSummary() {
               <span className="text-sm text-white/45">
                 {money(hotel.pricePerNight ?? 0, hotel.currency ?? "USD")}/night
               </span>
+            </div>
+          )}
+
+          {travelers.length > 0 && (
+            <div className="border-t border-white/10 pt-3">
+              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-white/40">
+                Traveler{travelers.length > 1 ? "s" : ""} ({travelers.length}
+                {trip?.passengers && trip.passengers !== travelers.length ? ` of ${trip.passengers}` : ""})
+              </p>
+              <div className="flex flex-col gap-1.5">
+                {travelers.map((t, i) => (
+                  <div key={i} className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="text-white/90">{t.fullName}</span>
+                    {t.passportNumber && (
+                      <span className="font-mono text-xs text-white/45">{t.passportNumber}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -145,7 +180,14 @@ export function PaymentPanel() {
           ? `Trip ${flight.segments[0].from}–${flight.segments.at(-1)?.to}`
           : "Complete trip",
       });
-      window.open(data.approveUrl, "_blank", "noopener");
+      if (data.simulate) {
+        // Demo mode: skip the PayPal window entirely — capture and confirm in one click.
+        await post("/api/pay/capture", { tripId: DEMO_TRIP_ID, orderId: data.orderId });
+        const booked = await post("/api/book", { tripId: DEMO_TRIP_ID });
+        setTrip(booked.trip);
+      } else {
+        window.open(data.approveUrl, "_blank", "noopener");
+      }
     } catch (err) {
       setError(String(err));
     } finally {

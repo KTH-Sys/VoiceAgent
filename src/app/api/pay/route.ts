@@ -8,7 +8,8 @@ export async function POST(req: NextRequest) {
     const { tripId, amountUsd, description } = await req.json();
     const { orderId, approveUrl } = await createOrder(amountUsd, description);
     updateTrip(tripId, { paypalOrderId: orderId, paypalApproveUrl: approveUrl, paymentStatus: "pending" });
-    return NextResponse.json({ orderId, approveUrl });
+    // In simulate mode the UI captures immediately and never opens PayPal checkout.
+    return NextResponse.json({ orderId, approveUrl, simulate: process.env.PAYPAL_SIMULATE === "1" });
   } catch (err) {
     console.error("pay:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
