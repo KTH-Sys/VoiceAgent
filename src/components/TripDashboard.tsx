@@ -235,7 +235,10 @@ export function DemoControls() {
     try {
       const data = await post("/api/disrupt", { tripId: DEMO_TRIP_ID });
       const n = data.alternatives?.length ?? 0;
-      setCallNote(`Calling you now — ${n} alternative${n === 1 ? "" : "s"} found.`);
+      setCallNote(
+        `Calling you now — ${n} alternative${n === 1 ? "" : "s"} found.` +
+          (data.callId ? `\nVocal Bridge call ID: ${data.callId}` : ""),
+      );
     } catch (err) {
       setError(String(err));
     } finally {
@@ -252,7 +255,9 @@ export function DemoControls() {
       >
         {busy ? "Calling…" : "Simulate Delay"}
       </button>
-      {callNote && <p className="mt-2 text-center text-xs text-white/45">{callNote}</p>}
+      {callNote && (
+        <p className="mt-2 whitespace-pre-line break-all text-center text-xs text-white/45">{callNote}</p>
+      )}
       {error && <ErrorNote>{error}</ErrorNote>}
     </Section>
   );

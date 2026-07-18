@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       })
       .join("; ");
 
-    const { callId } = await startOutboundCall({
+    const call = await startOutboundCall({
       phoneNumber,
       context:
         `URGENT DISRUPTION: The traveler's flight ${delayedFlight} from ${origin} to ${destination} ` +
@@ -60,7 +60,11 @@ export async function POST(req: NextRequest) {
         `PayPal, and confirms). Then read back the new confirmation code slowly.`,
     });
 
-    return NextResponse.json({ trip, callId, alternatives });
+    // Log it — Vocal Bridge has no "list calls" endpoint, so this is the only
+    // record of the call_id (retrievable later via GET /api/v1/calls/{id}).
+    console.log(`[disrupt] Vocal Bridge call_id=${call.callId} -> ${phoneNumber}`);
+
+    return NextResponse.json({ trip, callId: call.callId, alternatives });
   } catch (err) {
     console.error("disrupt:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
