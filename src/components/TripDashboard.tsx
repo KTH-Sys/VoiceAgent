@@ -112,7 +112,9 @@ export function TripSummary() {
           )}
 
           <div className="flex items-baseline justify-between border-t border-white/10 pt-3">
-            <span className="text-sm text-white/45">Total</span>
+            <span className="text-sm text-white/45">
+              Total{trip?.passengers && trip.passengers > 1 ? ` · ${trip.passengers} travelers` : ""}
+            </span>
             <span className="text-xl font-semibold tabular-nums text-yellow-400">{money(total)}</span>
           </div>
         </div>

@@ -12,7 +12,9 @@ export interface Trip {
   id: string;
   flight?: unknown; // selected Sabre flight offer
   hotel?: unknown; // selected Sabre hotel offer
-  traveler?: TravelerProfile;
+  passengers?: number; // party size (from the flight search)
+  travelers?: TravelerProfile[]; // one per scanned passport/ID
+  traveler?: TravelerProfile; // primary traveler = travelers[0] (back-compat)
   paymentStatus: "unpaid" | "pending" | "paid";
   paypalOrderId?: string;
   paypalApproveUrl?: string; // surfaced as the on-screen "Approve with PayPal" button
