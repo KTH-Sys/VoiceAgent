@@ -12,6 +12,10 @@ import TripProgress from "@/components/TripProgress";
 import { useTripContext } from "@/lib/TripContext";
 import { DEMO_TRIP_ID } from "@/lib/constants";
 
+// Demo checkout: when on, the UI never opens PayPal's real checkout window.
+// Mirror of the server-side PAYPAL_SIMULATE flag (see .env.example).
+const SIMULATE = process.env.NEXT_PUBLIC_PAYPAL_SIMULATE === "1";
+
 const money = (n: number, currency = "USD") =>
   new Intl.NumberFormat("en-US", { style: "currency", currency }).format(n);
 
@@ -224,28 +228,44 @@ export function PaymentPanel() {
       ) : paid ? (
         <p className="text-sm text-white/45">Paid — confirming your booking…</p>
       ) : trip?.paypalApproveUrl ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm text-white/45">
-            Approve the payment in the PayPal window, then complete it here.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <a
-              href={trip.paypalApproveUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-full bg-yellow-400 px-5 py-2 text-sm font-semibold text-black transition hover:bg-yellow-300"
-            >
-              Approve with PayPal
-            </a>
+        SIMULATE ? (
+          // Demo mode: order is created; complete it without opening PayPal checkout.
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-white/45">
+              PayPal order created ({trip.paypalOrderId}). Complete it here.
+            </p>
             <button
               onClick={handleCapture}
               disabled={busy === "capture"}
-              className="rounded-full border border-white/20 px-5 py-2 text-sm text-white/85 transition hover:bg-white/10 disabled:opacity-50"
+              className="rounded-full bg-yellow-400 px-5 py-2 text-sm font-semibold text-black transition hover:bg-yellow-300 disabled:opacity-50"
             >
-              {busy === "capture" ? "Completing…" : "I've approved — complete"}
+              {busy === "capture" ? "Completing…" : "Complete payment"}
             </button>
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-white/45">
+              Approve the payment in the PayPal window, then complete it here.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={trip.paypalApproveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-full bg-yellow-400 px-5 py-2 text-sm font-semibold text-black transition hover:bg-yellow-300"
+              >
+                Approve with PayPal
+              </a>
+              <button
+                onClick={handleCapture}
+                disabled={busy === "capture"}
+                className="rounded-full border border-white/20 px-5 py-2 text-sm text-white/85 transition hover:bg-white/10 disabled:opacity-50"
+              >
+                {busy === "capture" ? "Completing…" : "I've approved — complete"}
+              </button>
+            </div>
+          </div>
+        )
       ) : total <= 0 ? (
         // Nothing priced yet — a "Pay $0.00" button would just look broken.
         <p className="rounded-2xl border border-dashed border-white/15 p-4 text-sm text-white/40">
