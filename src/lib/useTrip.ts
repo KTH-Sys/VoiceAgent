@@ -33,10 +33,15 @@ export function useTrip() {
   return [trip, setTrip] as const;
 }
 
-/** Which step of the booking the trip is currently sitting on. */
+/**
+ * Which step of the booking the trip is currently sitting on.
+ * Steps run Traveler → Trip → Payment → Confirmed: identifying the traveller
+ * comes first, so the agent knows who is flying before it searches.
+ */
 export function tripStage(trip: Trip | null) {
-  if (trip?.confirmationNumber) return 3;
-  if (trip?.paymentStatus === "paid" || trip?.paypalApproveUrl) return 2;
-  if (trip?.traveler?.fullName) return 1;
-  return 0;
+  if (trip?.confirmationNumber) return 3; // Confirmed
+  if (trip?.paymentStatus === "paid" || trip?.paypalApproveUrl) return 2; // Payment under way
+  if (!trip?.traveler?.fullName) return 0; // still need the traveller
+  if (trip?.flight || trip?.hotel) return 2; // traveller + itinerary → ready to pay
+  return 1; // traveller known, still choosing the trip
 }

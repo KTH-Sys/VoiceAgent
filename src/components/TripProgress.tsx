@@ -6,7 +6,7 @@
 import type { Trip } from "@/lib/store";
 import { tripStage } from "@/lib/useTrip";
 
-const STEPS = ["Trip", "Traveler", "Payment", "Confirmed"];
+const STEPS = ["Traveler", "Trip", "Payment", "Confirmed"];
 
 export default function TripProgress({ trip }: { trip: Trip | null }) {
   const current = tripStage(trip);

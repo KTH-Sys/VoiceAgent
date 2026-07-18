@@ -10,7 +10,8 @@ import { TripStatus, TripSummary, PaymentPanel, DemoControls } from "@/component
 import { TripProvider, useTripContext } from "@/lib/TripContext";
 import { tripStage } from "@/lib/useTrip";
 
-const TABS = ["Talk", "Trip", "Traveler", "Payment"] as const;
+// Traveler leads: identify who's flying before the conversation starts.
+const TABS = ["Traveler", "Talk", "Trip", "Payment"] as const;
 type Tab = (typeof TABS)[number];
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
@@ -19,9 +20,9 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
 
   // A filled dot means that tab already has something worth looking at.
   const ready: Record<Tab, boolean> = {
+    Traveler: Boolean(trip?.traveler?.fullName),
     Talk: false,
     Trip: Boolean(trip?.flight || trip?.hotel),
-    Traveler: Boolean(trip?.traveler?.fullName),
     Payment: stage >= 2,
   };
 
@@ -57,12 +58,19 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
 }
 
 function Shell() {
-  const [tab, setTab] = useState<Tab>("Talk");
+  const [tab, setTab] = useState<Tab>("Traveler");
 
   return (
     <div className="flex flex-col gap-5">
       <TripStatus />
       <TabBar active={tab} onChange={setTab} />
+
+      {tab === "Traveler" && (
+        <div role="tabpanel" aria-label="Traveler">
+          {/* Once the document is read, send them straight into the conversation. */}
+          <UserDetailPanel onContinue={() => setTab("Talk")} />
+        </div>
+      )}
 
       {/* Always mounted so the call survives tab switches. */}
       <div className={tab === "Talk" ? "" : "hidden"} role="tabpanel" aria-label="Talk">
@@ -73,12 +81,6 @@ function Shell() {
         <div role="tabpanel" aria-label="Trip" className="flex flex-col gap-4">
           <TripSummary />
           <DemoControls />
-        </div>
-      )}
-
-      {tab === "Traveler" && (
-        <div role="tabpanel" aria-label="Traveler">
-          <UserDetailPanel />
         </div>
       )}
 
