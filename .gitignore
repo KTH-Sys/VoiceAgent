@@ -38,6 +38,9 @@ yarn-error.log*
 CLAUDE.md
 AGENTS.md
 
+# internal planning notes
+plan.md
+
 # vercel
 .vercel
 
