@@ -17,6 +17,7 @@ export interface Trip {
   paypalOrderId?: string;
   paypalApproveUrl?: string; // surfaced as the on-screen "Approve with PayPal" button
   disrupted: boolean;
+  alternatives?: unknown[]; // Sabre alternatives found during a disruption (FlightOption[])
   confirmationNumber?: string;
 }
 

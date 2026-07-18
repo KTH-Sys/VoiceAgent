@@ -7,6 +7,7 @@ import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/reso
 import { searchFlights, searchHotels, createBooking } from "./sabre";
 import type { FlightOption, HotelOption } from "./sabre";
 import { createOrder } from "./paypal";
+import { rebookNextFlight } from "./booking";
 import { getTrip, updateTrip } from "./store";
 
 const client = new OpenAI();
@@ -26,9 +27,13 @@ details come from a document upload on screen — if they're missing, ask the us
 snap a photo of their passport using the upload button, don't ask them to dictate numbers.
 
 If the trip is disrupted (check get_trip, or you were given disruption context for a
-phone call): you are calling the traveler proactively. Briefly apologize, state the
-delay, offer the best alternative first, and if they accept, save it with save_selection
-and confirm with confirm_booking. Mention any fare difference goes to their PayPal.`;
+phone call): you are calling the traveler proactively. Briefly apologize and state the
+delay. Then ASK whether they'd like you to book the next available flight, naming the
+single best alternative by airline and time ("I can get you on American 1198 at 5:29
+AM — shall I book it?"). Only if they say yes, call rebook_next_flight — it swaps the
+flight, charges any fare difference to their PayPal, and confirms in one step. Then read
+back the new confirmation code slowly. If they want a specific one of the alternatives,
+pass its flightId.`;
 
 const TOOLS: ChatCompletionTool[] = [
   {
@@ -112,8 +117,25 @@ const TOOLS: ChatCompletionTool[] = [
     function: {
       name: "confirm_booking",
       description:
-        "Finalize the booking and get a confirmation code. Call this after the user has paid (or accepted a rebooking during a disruption call).",
+        "Finalize the booking and get a confirmation code. Call this after the user has paid.",
       parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "rebook_next_flight",
+      description:
+        "During a disruption, book an alternative flight for the traveler. Call this ONLY after they agree. Defaults to the next/best alternative; pass flightId to pick a specific one you offered. Handles the flight swap, any fare-difference PayPal charge, and the new confirmation in one step.",
+      parameters: {
+        type: "object",
+        properties: {
+          flightId: {
+            type: "number",
+            description: "id of the chosen alternative flight; omit to take the next best one",
+          },
+        },
+      },
     },
   },
 ];
@@ -178,6 +200,11 @@ async function runTool(sessionId: string, name: string, args: Record<string, unk
       const { confirmationNumber } = await createBooking(sessionId);
       updateTrip(sessionId, { confirmationNumber, disrupted: false });
       return `Booking confirmed. Confirmation code: ${confirmationNumber}.`;
+    }
+    case "rebook_next_flight": {
+      const flightId = args.flightId === undefined ? undefined : Number(args.flightId);
+      const result = await rebookNextFlight(sessionId, flightId);
+      return result.message;
     }
     default:
       return `Unknown tool: ${name}`;

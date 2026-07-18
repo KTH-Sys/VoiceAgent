@@ -20,8 +20,6 @@ export async function POST(req: NextRequest) {
       firstSeg?.departure?.slice(0, 10) || new Date().toISOString().slice(0, 10);
     const delayedFlight = firstSeg?.flight || "AA 1234";
 
-    const trip = updateTrip(existing.id, { disrupted: true });
-
     let alternatives: FlightOption[] = [];
     try {
       alternatives = await searchFlights({
@@ -34,6 +32,10 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.error("disrupt: alternatives search failed, calling without them:", err);
     }
+
+    // Stash alternatives on the trip so the agent's rebook_next_flight tool (and
+    // the UI) can act on them without re-searching.
+    const trip = updateTrip(existing.id, { disrupted: true, alternatives });
 
     const phoneNumber = process.env.DEMO_USER_PHONE;
     if (!phoneNumber) {
@@ -51,9 +53,11 @@ export async function POST(req: NextRequest) {
       phoneNumber,
       context:
         `URGENT DISRUPTION: The traveler's flight ${delayedFlight} from ${origin} to ${destination} ` +
-        `is delayed about 4 hours. You are calling them proactively. Apologize briefly, explain the delay, ` +
-        `and offer to rebook. Alternatives: ${altSummary || "check search_flights for options"}. ` +
-        `If they accept one, save it with save_selection and confirm with confirm_booking.`,
+        `is delayed about 4 hours. You are calling them proactively. Apologize briefly and explain the delay. ` +
+        `Then ASK whether they'd like you to book the next available flight, naming the best option: ` +
+        `${altSummary || "the next available American flight"}. ` +
+        `Only if they say yes, call rebook_next_flight (it swaps the flight, charges any fare difference to ` +
+        `PayPal, and confirms). Then read back the new confirmation code slowly.`,
     });
 
     return NextResponse.json({ trip, callId, alternatives });
