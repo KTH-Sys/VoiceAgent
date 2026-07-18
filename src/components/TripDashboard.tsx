@@ -80,10 +80,11 @@ export function TripSummary() {
   const total = tripTotal(trip);
   const travelers = trip?.travelers ?? [];
   const confirmed = Boolean(trip?.confirmationNumber);
+  const hasAnything = Boolean(flight || hotel || confirmed || travelers.length > 0);
 
   return (
     <Section title="Your trip" hint="Updates live as Guidio finds options.">
-      {!flight && !hotel ? (
+      {!hasAnything ? (
         <p className="rounded-2xl border border-dashed border-white/15 p-4 text-sm text-white/40">
           Nothing booked yet — ask Guidio to find you a flight.
         </p>
@@ -146,12 +147,14 @@ export function TripSummary() {
             </div>
           )}
 
-          <div className="flex items-baseline justify-between border-t border-white/10 pt-3">
-            <span className="text-sm text-white/45">
-              Total{trip?.passengers && trip.passengers > 1 ? ` · ${trip.passengers} travelers` : ""}
-            </span>
-            <span className="text-xl font-semibold tabular-nums text-yellow-400">{money(total)}</span>
-          </div>
+          {total > 0 && (
+            <div className="flex items-baseline justify-between border-t border-white/10 pt-3">
+              <span className="text-sm text-white/45">
+                Total{trip?.passengers && trip.passengers > 1 ? ` · ${trip.passengers} travelers` : ""}
+              </span>
+              <span className="text-xl font-semibold tabular-nums text-yellow-400">{money(total)}</span>
+            </div>
+          )}
         </div>
       )}
     </Section>
