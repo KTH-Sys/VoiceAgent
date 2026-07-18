@@ -50,6 +50,7 @@ export interface FlightSearchParams {
   departureDate: string; // YYYY-MM-DD
   returnDate?: string;
   preferredCarrier?: string; // e.g. "AA" for the American Airlines story
+  passengers?: number; // adult travelers, default 1
   maxResults?: number; // default 5 — keep it small, the agent reads these aloud
 }
 
@@ -107,7 +108,9 @@ export async function searchFlights(params: FlightSearchParams): Promise<FlightO
         ? { VendorPref: [{ Code: params.preferredCarrier, PreferLevel: "Preferred" }] }
         : undefined,
       TravelerInfoSummary: {
-        AirTravelerAvail: [{ PassengerTypeQuantity: [{ Code: "ADT", Quantity: 1 }] }],
+        AirTravelerAvail: [
+          { PassengerTypeQuantity: [{ Code: "ADT", Quantity: Math.max(1, params.passengers ?? 1) }] },
+        ],
       },
       TPA_Extensions: {
         IntelliSellTransaction: { RequestType: { Name: `${maxResults * 4}ITINS` } },
